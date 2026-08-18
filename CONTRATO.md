@@ -7,6 +7,7 @@ Este documento define dos cosas:
 1. el **formato exacto** del plan que su backend debe retornar en `POST /api/solve`;
 2. las **reglas del mundo** que el banco de pruebas (el frontend) hace cumplir al ejecutar ese plan.
 
+
 Este documento **no** define el diseño de su agente. Cómo representar el estado, qué acciones internas modelar, cómo formular la transición, la meta, el costo y la estrategia de búsqueda son decisiones suyas y constituyen la parte principal de la evaluación (ver `design.md` en el enunciado).
 
 ---
