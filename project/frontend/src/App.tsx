@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import scenarioData from '@scenario'
 import type { Scenario } from './types'
 import { useSimStore } from './store/simStore'
 import { World } from './scene/World'
+import { GraphVisualization } from './scene/GraphVisualization'
 import { BottomControls, LeftPanel, RightPanel } from './ui/HUD'
 import { fetchPlan, runPlan } from './lib/api'
 import './App.css'
@@ -11,6 +12,7 @@ import './App.css'
 const scenario = scenarioData as Scenario
 
 export default function App() {
+  const [showGraph, setShowGraph] = useState(false)
   const loadScenario = useSimStore((s) => s.loadScenario)
   const reset = useSimStore((s) => s.reset)
   const setPlan = useSimStore((s) => s.setPlan)
@@ -59,9 +61,17 @@ export default function App() {
           <World />
         </Canvas>
       </div>
+      {showGraph && (
+        <div className="graph-modal">
+          <button className="graph-close" onClick={() => setShowGraph(false)}>
+            ✕
+          </button>
+          <GraphVisualization scenario={scenario} />
+        </div>
+      )}
       <LeftPanel />
       <RightPanel />
-      <BottomControls onExecute={onExecute} onReset={reset} />
+      <BottomControls onExecute={onExecute} onReset={reset} onToggleGraph={() => setShowGraph(!showGraph)} />
     </div>
   )
 }

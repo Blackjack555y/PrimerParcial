@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParcialRuby - Emergency Facility Solver</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 40px;
+        }
+        .panel {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            resize: vertical;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 15px;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .spinner {
+            display: none;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 6px;
+            display: none;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .stat {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .stat strong { color: #667eea; }
+        @media (max-width: 900px) {
+            main { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 ParcialRuby</h1>
+            <p>Emergency Facility Control Solver - UCS Graph Search</p>
+        </header>
+
+        <main>
+            <!-- Input Panel -->
+            <div class="panel">
+                <h2>📋 Scenario (JSON)</h2>
+                <textarea id="scenario" placeholder="Paste scenario JSON here or click Load Demo..."></textarea>
+                <button onclick="loadDemo()">📦 Load Demo Scenario</button>
+            </div>
+
+            <!-- Output Panel -->
+            <div class="panel">
+                <h2>💡 Solution</h2>
+                <div class="spinner" id="spinner"></div>
+                <div class="status" id="status"></div>
+                <div id="result" style="max-height: 400px; overflow-y: auto;">
+                    <textarea id="output" readonly style="background: #f5f5f5;"></textarea>
+                </div>
+                <div class="stats" id="stats" style="display:none;">
+                    <div class="stat">Total Cost: <strong id="cost">0</strong></div>
+                    <div class="stat">Steps: <strong id="steps">0</strong></div>
+                    <div class="stat">Iterations: <strong id="iterations">0</strong></div>
+                </div>
+                <button onclick="solve()">🚀 Solve</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function loadDemo() {
+            try {
+                const response = await fetch('/demo-scenario.json');
+                const scenario = await response.json();
+                document.getElementById('scenario').value = JSON.stringify(scenario, null, 2);
+            } catch (e) {
+                showStatus('Error loading demo scenario: ' + e.message, 'error');
+            }
+        }
+
+        async function solve() {
+            const scenarioText = document.getElementById('scenario').value;
+            
+            if (!scenarioText.trim()) {
+                showStatus('Please paste a scenario JSON', 'error');
+                return;
+            }
+
+            try {
+                const scenario = JSON.parse(scenarioText);
+                showSpinner(true);
+                showStatus('', '');
+
+                const response = await fetch('/api/solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(scenario)
+                });
+
+                const result = await response.json();
+                showSpinner(false);
+
+                if (result.solution_found) {
+                    document.getElementById('output').value = JSON.stringify(result, null, 2);
+                    document.getElementById('cost').textContent = result.total_cost;
+                    document.getElementById('steps').textContent = result.steps.length;
+                    document.getElementById('stats').style.display = 'grid';
+                    showStatus('✅ Solution found!', 'success');
+                } else {
+                    document.getElementById('output').value = result.message || 'No solution found';
+                    showStatus('❌ ' + (result.message || 'No solution'), 'error');
+                }
+            } catch (e) {
+                showSpinner(false);
+                showStatus('Error: ' + e.message, 'error');
+                document.getElementById('output').value = e.stack;
+            }
+        }
+
+        function showSpinner(show) {
+            document.getElementById('spinner').style.display = show ? 'block' : 'none';
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + type;
+        }
+
+        // Load demo on startup
+        window.addEventListener('load', loadDemo);
+    </script>
+</body>
+</html>

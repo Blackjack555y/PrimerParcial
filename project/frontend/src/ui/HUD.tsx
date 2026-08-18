@@ -131,9 +131,11 @@ export function RightPanel() {
 export function BottomControls({
   onExecute,
   onReset,
+  onToggleGraph,
 }: {
   onExecute: () => void
   onReset: () => void
+  onToggleGraph: () => void
 }) {
   const running = useSimStore((s) => s.running)
   const speed = useSimStore((s) => s.speed)
@@ -157,6 +159,13 @@ export function BottomControls({
         }}
       >
         ↺ RESET
+      </button>
+      <button
+        className="btn btn-secondary"
+        onClick={onToggleGraph}
+        title="Show facility map graph"
+      >
+        🗺️ MAP
       </button>
       <label className="speed-control">
         SPEED
