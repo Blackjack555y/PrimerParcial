@@ -2,6 +2,8 @@
 
 PDST: Analisis Previo a documento de design.md, teniendo un inventario de que entidades existen dentro del problema
 
+## 0. Notas (El documento tiene el mismo contenido) 
+
 ![A - Panel A](parcial/images/A.jpeg)
 
 ![B - Panel B](parcial/images/B.jpeg)
