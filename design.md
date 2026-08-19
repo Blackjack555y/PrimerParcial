@@ -1,6 +1,6 @@
 # Diseno del agente Ruby para Emergency Control
 
-**Estado:** diseno previo a la implementacion.
+**Estado:** implementado y validado en `parcial/` (Ruby). Las secciones 4.3, 7.1, 13 y 15 se actualizaron despues de la implementacion para reflejar decisiones que la medicion empirica corrigio respecto del diseno original; el resto del documento describe el diseno tal como se implemento. Ver `parcial/CONTINUACION.md` para el historial de trabajo.
 
 Este documento define el agente que se implementara posteriormente en Ruby para la instancia descrita en [Analisis.md](../Analisis.md). No contiene codigo ejecutable. Su objetivo es fijar con claridad la representacion del problema, las reglas del mundo, las acciones, la funcion de costo y la estrategia de busqueda antes de escribir el solver.
 
@@ -154,7 +154,7 @@ La representacion puede conservar un objeto en el estado mientras todavia tenga 
 
 La eliminacion es valida solo si el objeto ya no puede habilitar una accion futura ni cambiar el costo de una accion futura. No se elimina por conveniencia antes de comprobar esa condicion.
 
-Una primera implementacion puede conservar todos los objetos para reducir riesgo. La poda de objetos muertos se considera una optimizacion posterior y debe estar cubierta por pruebas de equivalencia.
+**Actualizacion post-implementacion:** esta poda se implemento como `State#canonical_key(liveness)`, que recibe un `ItemLiveness` construido por `UcsSolver` a partir del escenario. `State` sigue sin conocer el escenario: solo le pregunta a `liveness` si un objeto del `floor` sigue vivo. El `floor` fisico nunca se muta -- `canonical_key` solo se usa para la clave de dominancia/`CLOSED`, de forma que dos estados que difieren unicamente en la posicion de un objeto muerto colapsan a la misma clave sin perder informacion fisica que otra parte del modelo pudiera necesitar. Cubierto por pruebas de equivalencia en `parcial/test/test_search_properties.rb` (caso 1). El impacto medido de esta poda por si sola fue menor al esperado (~1.5% de reduccion de estados unicos en el diagnostico acotado); la causa dominante de la explosion de estados resulto ser la generacion de `DROP` (ver 7.1).
 
 ## 5. Modelo del escenario
 
@@ -251,7 +251,9 @@ El generador de sucesores debe producir acciones legales y relevantes para un pl
 
 La accion no debe ofrecer destinos arbitrarios: el unico destino generado es `floor[pos]`, la zona donde el robot se encuentra. Dejar un objeto y volver a recogerlo sin que cambie ninguna precondicion nunca reduce costo, porque agrega al menos 2 unidades de accion (`DROP` + `PICKUP`) y no mejora la posicion del robot.
 
-En esta instancia, la capacidad 3 frente a los cuatro objetos necesarios para `PANEL_B` y `PANEL_C` hace que un `DROP` sea potencialmente obligatorio. La poda conserva ese caso y elimina los `DROP` que solo permutan objetos sin impacto futuro.
+En esta instancia, la capacidad 3 frente a los cuatro objetos necesarios para `PANEL_B` y `PANEL_C` hace que un `DROP` de un objeto todavia util pareciera potencialmente obligatorio. La poda conserva ese caso y elimina los `DROP` que solo permutan objetos sin impacto futuro.
+
+**Actualizacion post-implementacion:** esta prediccion no se sostuvo empiricamente. `Applicable(s)` se implemento primero permitiendo `DROP` de un objeto vivo cuando no es necesario en la zona actual (poda `needed_here`), y por separado con una poda mas estricta que nunca ofrece `DROP` de un objeto vivo, sin importar la zona (poda `dead_only`, portada de una referencia en Python). Medido sobre la instancia real con el mismo limite de expansiones: `needed_here` no converge (no encuentra la meta ni con 200.000 expansiones); `dead_only` converge en 35.786 expansiones y encuentra el plan de costo optimo (88), porque existe una reordenacion de la ruta -- separar el viaje por herramientas del viaje por materiales -- que evita retener simultaneamente los 4 objetos sin necesitar soltar ninguno vivo. `Applicable(s)` restringe entonces `DROP` a objetos muertos unicamente; la poda `needed_here` se conserva en el codigo (`SuccessorGenerator#drop_actions`, parametro `drop_policy:`) por si una instancia futura si lo exigiera, pero no es la politica por defecto. En otras palabras: para esta instancia, la restriccion de capacidad se resuelve con planificacion de ruta, no con sacrificar carga util.
 
 ### 7.2 Acciones que no se generan
 
@@ -449,9 +451,12 @@ La separacion propuesta para la implementacion es:
 | `PriorityQueue` | Mantener `OPEN` ordenada por costo |
 | `UcsSolver` | Ejecutar UCS, `CLOSED`, dominancia y reconstruccion |
 | `PlanFormatter` | Traducir acciones internas al contrato visual |
-| `PlanValidator` | Verificar que el plan final sea legal y que su costo coincida |
 
 La interfaz HTTP o la pagina visual no deben contener reglas de busqueda. El backend recibe el escenario, llama al solver y devuelve el plan. El frontend solo visualiza el escenario y, posteriormente, la ejecucion del plan.
+
+**Actualizacion post-implementacion:** `PlanValidator` no se construyo como clase separada. La correspondencia `total_cost == suma(steps.cost)` se verifica como aserciones en `parcial/test/test_solver_scenario.rb`, y la legalidad de cada paso la revalida el propio simulador del frontend de evaluacion, que segun `CONTRATO.md` "no confia en el plan". Duplicar esa validacion en el backend hubiera sido logica redundante sin un consumidor propio; se prefirio cubrirla con tests.
+
+El servidor HTTP se implemento en `parcial/server.rb` usando unicamente `TCPServer` de la libreria estandar (sin gems): `gem install` fallo en la maquina de desarrollo por interceptacion SSL de un antivirus, lo que reafirma la decision de no depender de instalar nada para correr el backend.
 
 ## 14. Salida y contrato
 
@@ -492,7 +497,7 @@ El diseño se considerara listo para implementacion cuando las pruebas conceptua
 3. **Costo:** una ruta con menos acciones no se acepta automaticamente si tiene mayor costo.
 4. **Sin solucion:** un escenario sin material, llave o corredor suficiente termina sin ciclo infinito.
 5. **Rutas alternativas:** UCS elige el plan de menor costo entre rutas posibles hacia el mismo objetivo.
-6. **Capacidad:** el solver puede generar el `DROP` necesario para resolver la carga 3 frente a los cuatro objetos de `Z5`.
+6. **Capacidad:** el solver resuelve la carga 3 frente a los cuatro objetos de `Z5`; en la implementacion final lo logra mediante reordenacion de ruta (viajes separados por herramienta y por material), no mediante `DROP` de un objeto vivo -- ver actualizacion en 7.1.
 7. **Bateria:** el solver no permite movimientos con energia insuficiente y puede usar `RECHARGE` en `Z3`.
 8. **Dependencias:** `COMMAND` y `ARTILLERY` no se activan antes de `GENERATOR`.
 9. **Contrato:** el plan formateado usa exclusivamente las operaciones visuales permitidas.
