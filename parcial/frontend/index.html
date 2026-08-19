@@ -10,10 +10,10 @@
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">Emergency Control / Mission Map</p>
-        <h1>Facility graph</h1>
+        <p class="eyebrow">Mapa y Agente</p>
+        <h1>Grafo representativo</h1>
       </div>
-      <p class="mission">Restore the generator, command and artillery stations across five connected zones.</p>
+      <p class="mission">Lograr que las estaciones esten todas activas.</p>
     </header>
 
     <section class="board" aria-label="Mapa del grafo de la instalacion">
@@ -22,7 +22,7 @@
           <title id="map-title">Grafo de cinco zonas de Emergency Control</title>
           <desc id="map-desc">Z1 conecta con Z2 y Z4, Z2 con Z3 y Z5, Z3 con Z4, y Z4 con Z5. Las conexiones con puertas estan marcadas en amarillo.</desc>
 
-          <!-- Corridors: each undirected connection is drawn once. -->
+ 
           <line id="corridor-door1" class="corridor corridor-door" x1="220" y1="150" x2="540" y2="150"></line>
           <line id="corridor-door2" class="corridor corridor-door" x1="540" y1="150" x2="540" y2="420"></line>
           <line id="corridor-z1-z4" class="corridor" x1="220" y1="150" x2="220" y2="420"></line>
@@ -41,7 +41,7 @@
           <text class="door-label" x="568" y="286">DOOR2</text>
           <text class="door-label" x="180" y="556">DOOR3</text>
 
-          <!-- Zone nodes -->
+          <!-- Cuadrar bien los nodos de zona -->
           <g transform="translate(220 150)">
             <circle class="zone start" r="76"></circle>
             <text class="zone-id" y="-26">Z1 / START</text>
@@ -148,7 +148,7 @@
     <section id="summary" class="summary" aria-label="Resumen del plan" hidden>
       <div class="summary-head">
         <div>
-          <p class="eyebrow">Plan summary</p>
+          <p class="eyebrow">Resumen del plan</p>
           <h2>Bitacora de la mision</h2>
         </div>
         <div id="summary-badge" class="badge"></div>
