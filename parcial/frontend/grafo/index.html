@@ -23,12 +23,12 @@
           <desc id="map-desc">Z1 conecta con Z2 y Z4, Z2 con Z3 y Z5, Z3 con Z4, y Z4 con Z5. Las conexiones con puertas estan marcadas en amarillo.</desc>
 
           <!-- Corridors: each undirected connection is drawn once. -->
-          <line class="corridor corridor-door" x1="220" y1="150" x2="540" y2="150"></line>
-          <line class="corridor corridor-door" x1="540" y1="150" x2="540" y2="420"></line>
-          <line class="corridor" x1="220" y1="150" x2="220" y2="420"></line>
-          <line class="corridor" x1="540" y1="420" x2="220" y2="420"></line>
-          <line class="corridor corridor-door" x1="220" y1="420" x2="220" y2="680"></line>
-          <line class="corridor" x1="540" y1="150" x2="220" y2="680"></line>
+          <line id="corridor-door1" class="corridor corridor-door" x1="220" y1="150" x2="540" y2="150"></line>
+          <line id="corridor-door2" class="corridor corridor-door" x1="540" y1="150" x2="540" y2="420"></line>
+          <line id="corridor-z1-z4" class="corridor" x1="220" y1="150" x2="220" y2="420"></line>
+          <line id="corridor-z3-z4" class="corridor" x1="540" y1="420" x2="220" y2="420"></line>
+          <line id="corridor-door3" class="corridor corridor-door" x1="220" y1="420" x2="220" y2="680"></line>
+          <line id="corridor-z2-z5" class="corridor" x1="540" y1="150" x2="220" y2="680"></line>
 
           <text class="cost" x="380" y="132">4</text>
           <text class="cost" x="562" y="286">6</text>
@@ -47,16 +47,20 @@
             <text class="zone-id" y="-26">Z1 / START</text>
             <text class="zone-name" y="4">CONTROL</text>
             <text class="zone-note" y="28">ROBOT</text>
-            <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
-            <text class="marker-text" x="48" y="-48">K1</text>
+            <g id="marker-KEY1">
+              <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
+              <text class="marker-text" x="48" y="-48">K1</text>
+            </g>
           </g>
 
           <g transform="translate(540 150)">
             <circle class="zone" r="76"></circle>
             <text class="zone-id" y="-18">Z2</text>
             <text class="zone-name" y="11">STORAGE</text>
-            <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
-            <text class="marker-text" x="48" y="-48">K2</text>
+            <g id="marker-KEY2">
+              <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
+              <text class="marker-text" x="48" y="-48">K2</text>
+            </g>
             <circle class="marker marker-target" cx="-49" cy="49" r="15"></circle>
             <text class="marker-text" x="-49" y="49">M</text>
           </g>
@@ -66,8 +70,10 @@
             <text class="zone-id" y="-27">Z3</text>
             <text class="zone-name" y="2">WORKSHOP</text>
             <text class="zone-note" y="27">CHARGER</text>
-            <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
-            <text class="marker-text" x="48" y="-48">K3</text>
+            <g id="marker-KEY3">
+              <circle class="marker marker-key" cx="48" cy="-48" r="15"></circle>
+              <text class="marker-text" x="48" y="-48">K3</text>
+            </g>
             <circle class="marker marker-charger" cx="-48" cy="-48" r="15"></circle>
             <text class="marker-text" x="-48" y="-48">+</text>
           </g>
@@ -76,7 +82,7 @@
             <circle class="zone" r="76"></circle>
             <text class="zone-id" y="-18">Z4</text>
             <text class="zone-name" y="11">GENERATOR BAY</text>
-            <circle class="marker marker-target" cx="48" cy="49" r="15"></circle>
+            <circle id="station-GENERATOR" class="marker marker-target" cx="48" cy="49" r="15"></circle>
             <text class="marker-text" x="48" y="49">G</text>
           </g>
 
@@ -84,11 +90,13 @@
             <circle class="zone" r="76"></circle>
             <text class="zone-id" y="-18">Z5</text>
             <text class="zone-name" y="11">COMMAND DECK</text>
-            <circle class="marker marker-target" cx="-48" cy="43" r="15"></circle>
+            <circle id="station-COMMAND" class="marker marker-target" cx="-48" cy="43" r="15"></circle>
             <text class="marker-text" x="-48" y="43">C</text>
-            <circle class="marker marker-target" cx="48" cy="43" r="15"></circle>
+            <circle id="station-ARTILLERY" class="marker marker-target" cx="48" cy="43" r="15"></circle>
             <text class="marker-text" x="48" y="43">A</text>
           </g>
+
+          <circle id="robot-marker" class="robot" r="16" cx="220" cy="150"></circle>
         </svg>
       </div>
 
@@ -100,17 +108,40 @@
           <li><span class="swatch swatch-key"></span> Key</li>
           <li><span class="swatch swatch-target"></span> Mission target</li>
           <li><span class="swatch swatch-charger"></span> Recharge point</li>
+          <li><span class="swatch swatch-robot"></span> Robot</li>
         </ul>
 
-        <dl class="facts">
-          <div class="fact"><dt>Zones</dt><dd>05</dd></div>
-          <div class="fact"><dt>Connections</dt><dd>06</dd></div>
-          <div class="fact"><dt>Locked doors</dt><dd>03</dd></div>
-          <div class="fact"><dt>Battery start</dt><dd>55 / 100</dd></div>
-          <div class="fact"><dt>Cargo capacity</dt><dd>03</dd></div>
-        </dl>
+        <div class="player">
+          <h2>Plan playback</h2>
+          <div class="player-status">
+            <button id="btn-solve" type="button">Resolver</button>
+            <span id="solve-status" class="solve-status"></span>
+          </div>
 
-        <p class="caption">Numbers on each corridor are movement costs. The map is static for this first visualization step.</p>
+          <div class="gauge">
+            <div class="gauge-label"><span>Battery</span><span id="battery-value">-</span></div>
+            <div class="gauge-track"><div id="battery-fill" class="gauge-fill battery"></div></div>
+          </div>
+
+          <div class="gauge">
+            <div class="gauge-label"><span>Cost</span><span id="cost-value">0 / 0</span></div>
+            <div class="gauge-track"><div id="cost-fill" class="gauge-fill cost"></div></div>
+          </div>
+
+          <p class="current-action">Step <span id="step-index">0</span> / <span id="step-total">0</span><br><span id="action-text">Sin plan cargado.</span></p>
+
+          <p class="payload-label">Payload</p>
+          <ul id="payload-list" class="payload-list"></ul>
+
+          <div class="controls">
+            <button id="btn-reset" type="button" disabled title="Reiniciar">&#8676;</button>
+            <button id="btn-prev" type="button" disabled title="Paso anterior">&#9664;</button>
+            <button id="btn-play" type="button" disabled title="Reproducir">&#9654;</button>
+            <button id="btn-next" type="button" disabled title="Paso siguiente">&#9654;|</button>
+          </div>
+
+          <ol id="step-log" class="step-log"></ol>
+        </div>
       </aside>
     </section>
   </main>

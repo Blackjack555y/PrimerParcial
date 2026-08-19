@@ -53,6 +53,22 @@ class State
     [pos, carried, floor, doors_open, panels_repaired, stations_online]
   end
 
+  # Canonical key for CLOSED/dominance bookkeeping: identical to
+  # physical_key except that floor items which can no longer enable or
+  # cheapen any future action (per +liveness+) are left out. The floor
+  # itself is never mutated -- two states that differ only in the
+  # location of dead objects collapse to the same search key without
+  # losing any physical information the transition model might still need.
+  # State stays scenario-agnostic: the caller (UcsSolver) supplies an
+  # ItemLiveness built from the scenario; State only asks it dead?(self, item).
+  def canonical_key(liveness)
+    filtered_floor = floor.each_with_object({}) do |(zone, items), result|
+      kept = items.reject { |item, _count| liveness.dead?(self, item) }
+      result[zone] = kept unless kept.empty?
+    end
+    [pos, carried, filtered_floor, doors_open, panels_repaired, stations_online]
+  end
+
   def carried?(item)
     carried.fetch(item, 0).positive?
   end

@@ -3,17 +3,25 @@
 require_relative 'state'
 require_relative 'transition_model'
 require_relative 'successor_generator'
+require_relative 'item_liveness'
 require_relative 'plan_formatter'
 
 class UcsSolver
   MAX_EXPANSIONS = 100_000
   Node = Struct.new(:state, :cost, :parent, :action, keyword_init: true)
 
-  def initialize(scenario)
+  # drop_policy is forwarded to SuccessorGenerator#applicable as-is
+  # (:needed_here or :dead_only, see successor_generator.rb). max_expansions
+  # lets callers budget a run explicitly instead of always trusting
+  # MAX_EXPANSIONS, e.g. to compare drop policies under the same limit.
+  def initialize(scenario, drop_policy: :dead_only, max_expansions: MAX_EXPANSIONS)
     @scenario = scenario
     @transition_model = TransitionModel.new(scenario)
     @successor_generator = SuccessorGenerator.new(scenario)
+    @liveness = ItemLiveness.new(scenario)
     @formatter = PlanFormatter.new(scenario)
+    @drop_policy = drop_policy
+    @max_expansions = max_expansions
   end
 
   def solve
@@ -21,21 +29,22 @@ class UcsSolver
     root = Node.new(state: initial, cost: 0, parent: nil, action: nil)
     queue = MinPriorityQueue.new
     queue.push(root)
-    labels = { initial.physical_key => [[initial.battery, 0]] }
+    labels = { initial.canonical_key(@liveness) => [[initial.battery, 0]] }
     expanded = 0
 
     until queue.empty?
       node = queue.pop
-      next unless current_label?(labels, node.state.physical_key, node.state.battery, node.cost)
-      next if dominated_by_other_label?(labels, node.state.physical_key, node.state.battery, node.cost)
+      key = node.state.canonical_key(@liveness)
+      next unless current_label?(labels, key, node.state.battery, node.cost)
+      next if dominated_by_other_label?(labels, key, node.state.battery, node.cost)
 
       expanded += 1
-      if expanded > MAX_EXPANSIONS
+      if expanded > @max_expansions
         return {
           solution_found: false,
           total_cost: 0,
           steps: [],
-          message: "Search limit reached after #{MAX_EXPANSIONS} expansions"
+          message: "Search limit reached after #{@max_expansions} expansions"
         }
       end
 
@@ -50,7 +59,7 @@ class UcsSolver
         }
       end
 
-      @successor_generator.applicable(node.state).each do |action|
+      @successor_generator.applicable(node.state, drop_policy: @drop_policy).each do |action|
         successor = @transition_model.apply(node.state, action)
         next_cost = node.cost + action.fetch(:cost).to_i
         next unless register_label(labels, successor, next_cost)
@@ -80,7 +89,7 @@ class UcsSolver
   end
 
   def register_label(labels, state, cost)
-    key = state.physical_key
+    key = state.canonical_key(@liveness)
     labels[key] ||= []
     return false if labels[key].any? { |battery, known_cost| battery >= state.battery && known_cost <= cost }
 

@@ -122,6 +122,12 @@ class TransitionModel
     build_state(state, battery: @scenario.robot.fetch('battery_max').to_i)
   end
 
+  # Builds the successor state with exactly the effects of the action
+  # applied. Dead floor items (a key whose door is already open, a tool or
+  # material no unrepaired panel needs anymore) are intentionally left in
+  # place here: the physical floor is not the search key. Canonicalization
+  # that ignores dead items happens in State#canonical_key, driven by an
+  # ItemLiveness the search layer supplies -- see UcsSolver.
   def build_state(state, **changes)
     State.new(
       pos: changes.fetch(:pos, state.pos),

@@ -1,99 +1,71 @@
 # ParcialRuby - Emergency Facility Control Agent
 
-AI agent solver implementation in Ruby for the PrimerParcial university project.
+Agente UCS (Uniform Cost Search) en Ruby para el problema "Emergency Control" del PrimerParcial. Ver `design.md` (raíz del repo) para el diseño formal y `CONTINUACION.md` para el historial de trabajo.
 
-## Structure
+## Estructura
 
 ```
 parcial/
-├── Gemfile              # Dependencies
-├── Gemfile.lock         # Lock file
-├── config/
-│   ├── routes.rb
-│   ├── database.yml
-│   └── puma.rb
-├── backend/
-│   ├── controllers/
-│   │   ├── api/
-│   │   │   └── solve_controller.rb
-│   │   └── pages_controller.rb
-│   ├── models/
-│   │   ├── state.rb
-│   │   ├── facility.rb
-│   │   └── solver.rb
-│   ├── services/
-│   │   ├── ucs_solver.rb
-│   │   ├── state_manager.rb
-│   │   └── plan_executor.rb
-│   ├── views/
-│   │   ├── pages/
-│   │   │   └── index.html.erb
-│   │   └── layouts/
-│   └── assets/
-│       ├── stylesheets/
-│       └── javascripts/
 ├── lib/
-│   └── agents/
-│       ├── graph_search.rb
-│       └── state_representation.rb
-├── spec/
-│   ├── services/
-│   ├── models/
-│   └── scenarios/
-├── db/
-│   └── schema.rb
-└── README.md
+│   ├── scenario.rb           # Carga y valida el escenario JSON
+│   ├── state.rb               # Estado físico canónico e inmutable
+│   ├── item_liveness.rb       # ¿Puede este objeto seguir habilitando una accion futura?
+│   ├── transition_model.rb    # Aplica una accion y produce el estado sucesor
+│   ├── successor_generator.rb # Applicable(state)
+│   ├── ucs_solver.rb          # Uniform Cost Search + dominancia
+│   └── plan_formatter.rb      # Traduce a la salida fija del contrato
+├── test/                      # ruby -Ilib test/test_X.rb
+├── scenarios/scenario.json    # Escenario de referencia
+├── server.rb                  # Servidor HTTP (sin gems, solo Ruby core)
+└── frontend/grafo/            # Visualizacion estatica del grafo
 ```
 
-## Setup
+Ningún archivo de `lib/` conoce HTTP; el servidor es un envoltorio delgado.
 
-```bash
+## Correr el servidor
+
+No requiere `bundle install` ni gems externas — usa `TCPServer` de la librería estándar.
+
+```powershell
 cd parcial
-bundle install
-rails db:create
-rails s -p 3000
+ruby server.rb 3000
 ```
 
-## API Endpoints
+## API
 
-### POST /api/solve
-Solves the emergency facility control problem.
+### `GET /api/health`
 
-**Request:**
-```json
-{
-  "zones": [...],
-  "corridors": [...],
-  "doors": [...],
-  "keys": [...],
-  "materials": [...],
-  "tools": [...],
-  "stations": [...],
-  "panels": [...],
-  "robot": {...}
-}
-```
+`{ "status": "ok" }`
 
-**Response:**
+### `GET /api/scenario`
+
+Devuelve `scenarios/scenario.json` tal cual.
+
+### `POST /api/solve`
+
+Resuelve el escenario recibido en el body. Si el body está vacío, usa `scenarios/scenario.json` por defecto.
+
+**Request:** el JSON completo del escenario (`zones`, `corridors`, `robot`, `doors`, `keys`, `tools`, `materials`, `panels`, `stations`, `chargers`, `goal`, `action_costs`).
+
+**Response** (formato fijo, ver `CONTRATO.md` en la raíz):
 ```json
 {
   "solution_found": true,
-  "total_cost": 63,
+  "total_cost": 88,
   "steps": [
     { "op": "MOVE", "from": "Z1", "to": "Z2", "cost": 4 }
-  ]
+  ],
+  "message": "Solution found after 35786 expansions"
 }
 ```
 
-## Key Classes
+## Tests
 
-- **State**: Represents facility state (robot position, battery, inventory, world state)
-- **UCSolver**: Uniform Cost Search implementation
-- **StateMangaer**: State transitions and validation
-- **PlanExecutor**: Converts internal actions to CONTRATO-compliant operations
-
-## Testing
-
-```bash
-bundle exec rspec spec/
+```powershell
+cd parcial
+ruby -Ilib test/test_core.rb
+ruby -Ilib test/test_solver_smoke.rb
+ruby -Ilib test/test_solver_scenario.rb
+ruby -Ilib test/test_search_properties.rb
+ruby -Ilib test/test_search_diagnostic.rb
 ```
