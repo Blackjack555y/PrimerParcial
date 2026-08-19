@@ -15,7 +15,7 @@ require_relative 'lib/scenario'
 require_relative 'lib/ucs_solver'
 
 DEFAULT_SCENARIO_PATH = File.join(__dir__, 'scenarios', 'scenario.json')
-FRONTEND_DIR = File.join(__dir__, 'frontend', 'grafo')
+FRONTEND_DIR = File.join(__dir__, '..', 'frontend')
 STATIC_FILES = {
   '/' => ['index.html', 'text/html; charset=utf-8'],
   '/style.css' => ['style.css', 'text/css; charset=utf-8'],

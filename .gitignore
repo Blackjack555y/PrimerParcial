@@ -1,6 +1,9 @@
 # Material de clase — no forma parte de la entrega
 DOCS/
 
+# Scaffold original de la catedra, reemplazado por la implementacion en parcial/
+project (Outdated)/
+
 # Sistema
 .DS_Store
 Thumbs.db

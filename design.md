@@ -255,6 +255,8 @@ En esta instancia, la capacidad 3 frente a los cuatro objetos necesarios para `P
 
 **Actualizacion post-implementacion:** esta prediccion no se sostuvo empiricamente. `Applicable(s)` se implemento primero permitiendo `DROP` de un objeto vivo cuando no es necesario en la zona actual (poda `needed_here`), y por separado con una poda mas estricta que nunca ofrece `DROP` de un objeto vivo, sin importar la zona (poda `dead_only`, portada de una referencia en Python). Medido sobre la instancia real con el mismo limite de expansiones: `needed_here` no converge (no encuentra la meta ni con 200.000 expansiones); `dead_only` converge en 35.786 expansiones y encuentra el plan de costo optimo (88), porque existe una reordenacion de la ruta -- separar el viaje por herramientas del viaje por materiales -- que evita retener simultaneamente los 4 objetos sin necesitar soltar ninguno vivo. `Applicable(s)` restringe entonces `DROP` a objetos muertos unicamente; la poda `needed_here` se conserva en el codigo (`SuccessorGenerator#drop_actions`, parametro `drop_policy:`) por si una instancia futura si lo exigiera, pero no es la politica por defecto. En otras palabras: para esta instancia, la restriccion de capacidad se resuelve con planificacion de ruta, no con sacrificar carga util.
 
+**No es una prueba de completitud.** No se encontro (tras intentarlo con varias construcciones) un escenario razonable donde `dead_only` falle genuinamente teniendo `needed_here` una solucion -- la monotonia del mundo (puertas, paneles y estaciones nunca revierten) parece permitir resolver casi cualquier restriccion de capacidad recogiendo un par herramienta+material a la vez y regresando por el siguiente. Pero eso es evidencia empirica repetida, no una demostracion formal de que `dead_only` sea completo para toda instancia con esta forma. Por eso `UcsSolver#solve` no confia unicamente en `dead_only`: si la busqueda con `dead_only` agota su espacio de estados sin encontrar meta (la frontera se vacia, no un limite de expansiones truncando la corrida), reintenta una sola vez con `needed_here` antes de declarar `FAILURE`. El costo de este resguardo es cero cuando `dead_only` ya encuentra plan (el caso medido aqui), y solo se paga en la instancia rara donde realmente hace falta.
+
 ### 7.2 Acciones que no se generan
 
 - `PICKUP` de un material excedente cuando no existe panel pendiente que pueda consumirlo.
@@ -437,6 +439,24 @@ Un UCS ingenuo puede crear millones de nodos porque cada `DROP` arbitrario codif
 
 No se resolvera el problema alterando el escenario: no se subira artificialmente la capacidad, no se eliminaran estaciones, no se ignorara la bateria y no se cambiaran costos.
 
+### Formulacion y tamano del espacio (obligatorio)
+
+**1. Por que "5 zonas, ~10 objetos, capacidad 3" puede generar millones de nodos en un UCS ingenuo.**
+Si `Applicable(s)` generara `DROP` sin restriccion, la posicion de cada objeto deja de estar fija y pasa a ser una variable independiente: cada uno de los ~10 objetos (3 llaves, 3 herramientas, 3 tipos de material) puede estar en cualquiera de las 5 zonas o en `carried`, es decir, del orden de `6^10 ≈ 6*10^7` combinaciones solo de `floor`. Multiplicado por `pos` (5), `doors_open` (`2^3`), `panels_repaired` (`2^3`), `stations_online` (acotado por dependencias pero hasta `2^3`) y los niveles de bateria alcanzables (hasta `battery_max = 100`, antes de aplicar la dominancia de 11.5), el espacio nominal supera ampliamente lo que UCS puede explorar en tiempo de examen. El mapa (5 zonas) no es lo que explota; la combinatoria de "donde quedo cada objeto" si.
+
+**2. Que papel tiene `DROP` en esa explosion.**
+Es la unica accion que puede colocar un objeto en una zona donde no empezo. Sin ninguna restriccion, cualquier estado con carga llena ofrece un `DROP` por cada objeto cargado, y cada uno de esos `DROP` es un estado fisico nuevo y no dominado (difiere en que quedo en el piso vs. en la carga). Esto se confirmo empiricamente durante la implementacion: instrumentando el `UcsSolver` real sobre `scenario.json`, antes de restringir `DROP` a objetos muertos, entre el 90% y el 100% de las acciones `DROP` generadas en la exploracion correspondian a objetos todavia utiles ofrecidos como candidatos especulativos de sacrificio, no a objetos ya inservibles (ver `parcial/CONTINUACION.md`).
+
+**3. Que podas o abstracciones se aplicaron y por que son sound (no pierden el optimo).**
+
+- **No generar `PICKUP` de un objeto muerto ni de material excedente** (7.1, `pickup_needed?`/`useful_item?`). Argumento: por definicion, un objeto muerto no puede habilitar ninguna accion futura ni abaratarla (una llave cuya puerta ya esta abierta nunca vuelve a usarse para abrir esa puerta; un material cuyo unico panel consumidor ya fue reparado nunca vuelve a ser requerido). Sea `π` un plan optimo que contiene `PICKUP(x)` con `x` muerto en ese punto. Como `x` nunca vuelve a ser referenciado por ninguna precondicion, `π' = π` sin ese `PICKUP` (y sin cualquier `DROP(x)` posterior) sigue siendo legal y `cost(π') <= cost(π)`. Por lo tanto `π` no puede ser estrictamente mejor que `π'`; la poda nunca descarta el unico plan optimo.
+- **Canonicalizar el estado ignorando la posicion de objetos muertos en `floor`** (4.3, `State#canonical_key`). Argumento: `pickup_actions` y `drop_actions` ya filtran por `useful_item?`, de modo que la posicion exacta de un objeto muerto no aparece en ninguna precondicion evaluada por `Applicable(s)` ni por `Result`. Dos estados que solo difieren en donde quedo un objeto muerto producen exactamente el mismo conjunto de sucesores y los mismos costos; fusionarlos en `CLOSED` no descarta ningun futuro distinto porque no existe tal futuro distinto.
+- **Dominancia de bateria por configuracion fisica** (11.5). Argumento ya desarrollado alli: si `A.g <= B.g` y `A.battery >= B.battery` para la misma configuracion fisica, todo plan futuro posible desde `B` es posible desde `A` con costo no mayor; `B` es redundante.
+- **Restriccion de `DROP` a objetos muertos (`dead_only`, actualizacion de 7.1).** A diferencia de las tres anteriores, esta poda **no tiene una prueba de solidez general**: se justifica empiricamente (encuentra el plan de costo optimo medido, 88, en la instancia real) y se protege con el reintento automatico descrito en 7.1 para el caso en que una instancia distinta si dependa de soltar un objeto vivo. Es la unica poda de esta lista que se declara honesta y explicitamente como heuristica validada por medicion, no como teorema.
+
+**4. Por que no es solucion subir la capacidad, bajar las estaciones o ignorar la bateria.**
+Esos cambios ocultan el sintoma en la instancia de ejemplo sin resolver el problema de formulacion: el profesor probara instancias distintas (otras posiciones, costos, recursos, y posiblemente sin solucion), y un agente que solo funciona porque se le aflojaron las restricciones del mundo fallara en cuanto esas restricciones vuelvan a ser realistas. El arreglo correcto vive en `Applicable(s)` y en la canonicalizacion del estado, no en el escenario.
+
 ## 13. Arquitectura conceptual Ruby
 
 La separacion propuesta para la implementacion es:
@@ -500,6 +520,21 @@ El diseño se considerara listo para implementacion cuando las pruebas conceptua
 6. **Capacidad:** el solver resuelve la carga 3 frente a los cuatro objetos de `Z5`; en la implementacion final lo logra mediante reordenacion de ruta (viajes separados por herramienta y por material), no mediante `DROP` de un objeto vivo -- ver actualizacion en 7.1.
 7. **Bateria:** el solver no permite movimientos con energia insuficiente y puede usar `RECHARGE` en `Z3`.
 8. **Dependencias:** `COMMAND` y `ARTILLERY` no se activan antes de `GENERATOR`.
+
+Las ocho verificaciones estan implementadas como pruebas automatizadas en `parcial/test/test_search_properties.rb` (casos 1 a 5) y `parcial/test/test_solver_scenario.rb` (capacidad, bateria y dependencias, verificadas end-to-end sobre `scenario.json`).
+
+## 16. Metodologia de validacion empirica
+
+El diseno de las secciones anteriores no se dio por bueno solo por argumento en prosa: cada decision de poda se midio antes de adoptarse, siguiendo un principio simple -- no correr UCS completo a ciegas sobre el escenario real como metodo de prueba y error, porque una corrida sin instrumentacion que no termina no dice nada sobre *por que* no termina.
+
+El proceso seguido fue:
+
+1. **Diagnostico acotado antes que UCS completo.** Se construyo una exploracion con tope duro de expansiones (`test_search_diagnostic.rb`) que reporta cuantos estados unicos genera cada tipo de accion, sin ejecutar la busqueda por costo completa. Esto identifico que `DROP` era la accion dominante en la explosion de estados, antes de tocar una linea de poda.
+2. **Escenarios sinteticos minimos para aislar cada regla.** Antes de validar una poda contra `scenario.json` (5 zonas, espacio de estados grande), se probo contra escenarios de 1 a 3 zonas construidos en memoria (`Scenario.new(hash)`, sin archivo) donde el comportamiento esperado es verificable a mano. `test_solver_smoke.rb` y `test_search_properties.rb` son el resultado de ese aislamiento.
+3. **Comparacion cuantitativa de politicas alternativas**, no solo una intuicion sobre cual poda de `DROP` es "mas razonable". Se corrio el mismo `UcsSolver` con el mismo limite de expansiones bajo dos politicas (`needed_here` y `dead_only`, ver 7.1) y se comparo directamente: expansiones hasta converger, si converge, y el costo del plan encontrado. La decision de diseno (`dead_only` por defecto) se tomo con ese numero en mano, no antes.
+4. **Corrida real end-to-end como criterio de aceptacion final**, no como primer paso. Solo despues de que las tres validaciones anteriores dieran resultados consistentes se corrio `UcsSolver` sobre `scenario.json` completo, con limite de expansiones explicito (no el limite de seguridad `MAX_EXPANSIONS` a ciegas).
+
+Esta metodologia es replicable: los cuatro pasos corresponden a archivos de test versionados, no a corridas manuales descartadas.
 9. **Contrato:** el plan formateado usa exclusivamente las operaciones visuales permitidas.
 
 Este documento fija el comportamiento esperado. La siguiente etapa sera implementar cada componente en Ruby y probarlo contra `parcial/scenarios/scenario.json`.

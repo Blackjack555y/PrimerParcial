@@ -24,7 +24,32 @@ class UcsSolver
     @max_expansions = max_expansions
   end
 
+  # dead_only is fast but not sound in general: an instance that genuinely
+  # requires dropping a still-useful item (no route reordering avoids it)
+  # has no plan under dead_only's restricted Applicable(s), even though one
+  # exists under the full rules. See design.md 7.1. To avoid a false
+  # FAILURE on such an instance, a genuine exhaustion of the search space
+  # under dead_only (the frontier empties -- not a budget timeout) triggers
+  # one retry with the more permissive needed_here policy before giving up.
   def solve
+    result = run(@drop_policy)
+    return result if result[:solution_found]
+    return result unless @drop_policy == :dead_only && genuinely_exhausted?(result)
+
+    fallback = run(:needed_here)
+    if fallback[:solution_found]
+      fallback[:message] = "#{fallback[:message]} (dead_only found no plan; retried with needed_here)"
+    end
+    fallback
+  end
+
+  private
+
+  def genuinely_exhausted?(result)
+    result[:message].start_with?('No solution found')
+  end
+
+  def run(drop_policy)
     initial = State.initial(@scenario)
     root = Node.new(state: initial, cost: 0, parent: nil, action: nil)
     queue = MinPriorityQueue.new
@@ -59,7 +84,7 @@ class UcsSolver
         }
       end
 
-      @successor_generator.applicable(node.state, drop_policy: @drop_policy).each do |action|
+      @successor_generator.applicable(node.state, drop_policy: drop_policy).each do |action|
         successor = @transition_model.apply(node.state, action)
         next_cost = node.cost + action.fetch(:cost).to_i
         next unless register_label(labels, successor, next_cost)
@@ -75,8 +100,6 @@ class UcsSolver
       message: "No solution found after #{expanded} expansions"
     }
   end
-
-  private
 
   def reconstruct_actions(node)
     actions = []

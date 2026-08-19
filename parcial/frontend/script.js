@@ -73,7 +73,10 @@ class PlanPlayer {
       stepTotal: document.getElementById('step-total'),
       actionText: document.getElementById('action-text'),
       payloadList: document.getElementById('payload-list'),
-      stepLog: document.getElementById('step-log')
+      stepLog: document.getElementById('step-log'),
+      summary: document.getElementById('summary'),
+      summaryBody: document.getElementById('summary-body'),
+      summaryBadge: document.getElementById('summary-badge')
     };
   }
 
@@ -105,6 +108,7 @@ class PlanPlayer {
 
       if (!result.solution_found) {
         this.el.solveStatus.textContent = `Sin solucion: ${result.message || 'FAILURE'}`;
+        this.showFailureSummary(result.message);
         this.el.solveBtn.disabled = false;
         return;
       }
@@ -114,6 +118,7 @@ class PlanPlayer {
       this.el.solveStatus.textContent = `Costo ${result.total_cost} - ${this.steps.length} pasos`;
       this.el.stepTotal.textContent = this.steps.length;
       this.buildLog();
+      this.buildSummary();
       [this.el.resetBtn, this.el.prevBtn, this.el.playBtn, this.el.nextBtn].forEach((btn) => { btn.disabled = false; });
       this.goTo(0);
     } catch (error) {
@@ -145,6 +150,71 @@ class PlanPlayer {
       }
       default: return JSON.stringify(step);
     }
+  }
+
+  // Full-sentence version for the end-of-page summary table, as opposed to
+  // the compact log line from describe().
+  describeNatural(step) {
+    switch (step.op) {
+      case 'MOVE': return `Se mueve de ${step.from || '?'} a ${step.to}.`;
+      case 'PICKUP': return `Recoge ${step.item} del suelo.`;
+      case 'DROP': return `Deja ${step.item} en el suelo.`;
+      case 'INTERACT':
+        switch (step.action) {
+          case 'OPEN_DOOR': return `Abre la puerta ${step.target}.`;
+          case 'REPAIR': return `Repara ${step.target} usando ${step.consumes}.`;
+          case 'ACTIVATE': return `Activa la estacion ${step.target}.`;
+          case 'RECHARGE': return `Recarga la bateria al maximo en ${step.target}.`;
+          default: return `${step.action} sobre ${step.target}.`;
+        }
+      default: return JSON.stringify(step);
+    }
+  }
+
+  opChip(step) {
+    const kind = step.op.toLowerCase();
+    const label = step.op === 'INTERACT' ? step.action : step.op;
+    return `<span class="op-chip op-${kind}">${label}</span>`;
+  }
+
+  showFailureSummary(message) {
+    this.el.summary.hidden = false;
+    this.el.summaryBadge.textContent = 'SIN SOLUCION';
+    this.el.summaryBadge.style.background = 'var(--red)';
+    this.el.summaryBody.innerHTML = `<tr><td colspan="6">${message || 'La mision no se puede completar (FAILURE).'}</td></tr>`;
+  }
+
+  // Walks every step once, accumulating cost/battery/payload, to render the
+  // full plan as a natural-language table -- independent of playback, so it
+  // is visible right after solving without pressing play.
+  buildSummary() {
+    const batteryMax = this.scenario.robot.battery_max;
+    let battery = this.scenario.robot.battery_start;
+    let cost = 0;
+    const payload = [];
+
+    const rows = this.steps.map((step, index) => {
+      cost += step.cost;
+      battery -= step.cost;
+      if (step.op === 'INTERACT' && step.action === 'RECHARGE') battery = batteryMax;
+      if (step.op === 'PICKUP') payload.push(step.item);
+      if (step.op === 'DROP') this.removeOne(payload, step.item);
+      if (step.op === 'INTERACT' && step.action === 'REPAIR') this.removeOne(payload, step.consumes);
+
+      return `<tr>
+        <td class="col-index">${index + 1}</td>
+        <td class="col-action">${this.opChip(step)}${this.describeNatural(step)}</td>
+        <td class="col-cost">${step.cost}</td>
+        <td class="col-total">${cost} / ${this.totalCost}</td>
+        <td class="col-battery">${battery} / ${batteryMax}</td>
+        <td class="col-payload">${payload.length ? payload.join(', ') : '—'}</td>
+      </tr>`;
+    });
+
+    this.el.summary.hidden = false;
+    this.el.summaryBadge.textContent = `MISION COMPLETA · Costo total ${this.totalCost}`;
+    this.el.summaryBadge.style.background = '#2f8f4e';
+    this.el.summaryBody.innerHTML = rows.join('');
   }
 
   togglePlay() {
